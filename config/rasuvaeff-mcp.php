@@ -1,0 +1,368 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    // the endpoint; an empty path registers no route
+    'route' => [
+        'path' => 'mcp',
+        // Laravel middleware in front of the endpoint's own guard
+        'middleware' => [],
+    ],
+    // what protects the endpoint: 'secret' (endpoint_secret / client_secrets)
+    // or 'oauth' (the oauth block)
+    'guard' => 'secret',
+    'server_name' => env('APP_NAME', 'laravel'),
+    'server_version' => 'dev',
+    // list of application tool classes (public methods annotated with the
+    // SDK #[McpTool] / #[McpResource] attributes); the core registers none
+    'tools' => [],
+    // fail-closed: SharedSecretMiddleware answers 503 while neither this
+    // nor 'client_secrets' is set — set a secret or protect the endpoint
+    // with a network ACL. Mutually exclusive with 'client_secrets'.
+    'endpoint_secret' => env('MCP_SECRET', ''),
+    // several clients / secret rotation: client id => secret or list of
+    // ACTIVE secrets (two secrets under one id = rotation window; a
+    // removed secret is revoked immediately). The resolved client id is
+    // exposed to interceptors (ToolCallContext::$clientId) and mirrored
+    // into the session; the raw secret never travels further than the
+    // middleware. Mutually exclusive with 'endpoint_secret'.
+    'client_secrets' => [],
+    'secret_header' => 'X-Mcp-Secret',
+    // extra hosts for the transport's DNS-rebinding protection
+    // (localhost is always allowed); required when the endpoint is
+    // served from a real domain, e.g. ['api.example.com']
+    'allowed_hosts' => [],
+    'session' => [
+        // empty => application-specific default under sys_get_temp_dir()
+        // (derived from server_name); created 0700, session files clamped
+        // to 0600 — session JSON must not be readable by other OS users
+        'dir' => '',
+        'ttl' => 3600,
+    ],
+    // anti-loop guard, NOT a client quota: max tools/call (0 = unlimited)
+    // per session on the handshake era, per client id and window on the
+    // stateless 2026-07-28 era (which has no session; counted in the
+    // container's PSR-16 cache, required then — a missing one fails the
+    // build). Without SharedSecretMiddleware every anonymous stateless
+    // caller shares one budget.
+    'tool_call_budget' => [
+        'calls' => 0,
+        'window' => 3600,
+    ],
+    // also serve the stateless 2026-07-28 era (no initialize, no session)
+    // on the same endpoint; false answers its requests with "unsupported
+    // protocol version" — and a client speaking only that revision does
+    // not fall back to initialize on its own
+    'modern_era' => true,
+    // stateless era: reject a request whose standard headers (Mcp-Method,
+    // Mcp-Name, Mcp-Param-*) contradict its body (-32020) — what lets a
+    // proxy route and authorize on the headers without parsing the body
+    'header_validation' => true,
+    // stateless era: what feeds subscriptions/listen streams (resource
+    // updates from Resource\ResourceUpdateNotifier). '' = no bus: streams
+    // acknowledge and carry nothing. 'psr16' = through the container's
+    // PSR-16 cache — the PHP-FPM choice, where the publishing request and
+    // the listening one are different workers. 'memory' = one process
+    // (stdio, persistent runtimes). An unknown value fails the build.
+    // multi round-trip calls (a handler asking the user mid-call through
+    // ClientGateway::elicit()): on the stateless era each ask ends the
+    // request and the client re-sends the call with the answer; answers
+    // from earlier rounds travel in a signed requestState. 'key' signs it
+    // — at least 32 bytes, from the environment, never committed. Empty
+    // = none: one ask per call works, a second fails the call.
+    // stateless era: SEP-2549 caching hints on cacheable answers
+    // (server/discover, tools/list, prompts/list, resources/list,
+    // resources/templates/list, resources/read). ttl_ms 0 + private = the
+    // SDK default, nothing fresh, nothing shared. 'public' lets a SHARED
+    // cache serve one caller's answer to another — and fails the build on
+    // a list or read a visibility filter makes per caller. Per method:
+    // 'methods' => ['tools/list' => ['ttl_ms' => 300000, 'scope' => 'private']].
+    'cache_policy' => [
+        'ttl_ms' => 0,
+        'scope' => 'private',
+        'methods' => [],
+    ],
+    'request_state' => [
+        'key' => env('MCP_REQUEST_STATE_KEY', ''),
+        'ttl' => 600,
+        // rotation: old keys that still verify a state but no longer
+        // sign one (move the old key here when setting a new 'key')
+        'previous_keys' => [],
+        // tie a state to its originating request and client id; a
+        // replayed state does not verify
+        'bind' => true,
+    ],
+    // OAuth 2.1 resource server (the alternative to endpoint_secret):
+    // route [BearerTokenMiddleware, McpAction] and serve
+    // ProtectedResourceMetadataHandler at the well-known path the
+    // resource derives (/.well-known/oauth-protected-resource/<path>).
+    // Validation, challenges and scopes are the SDK's own.
+    'oauth' => [
+        // canonical URI of the endpoint, e.g. https://mcp.example.com/mcp
+        // ('' = OAuth not configured; the guard then fails to build)
+        'resource' => '',
+        // issuers whose tokens this server accepts (at least one)
+        'authorization_servers' => [],
+        // expected `iss`; '' = the first authorization server
+        'issuer' => '',
+        // accepted `aud` values; [] = the resource
+        'audience' => [],
+        'algorithms' => ['RS256'],
+        // required `typ` header, e.g. 'at+jwt' (RFC 9068); '' skips it
+        'token_type' => '',
+        // tolerated clock skew, seconds
+        'leeway' => 0,
+        'scope_claim' => 'scope',
+        // advertised in the metadata and the 401 challenge
+        'scopes_supported' => [],
+        // required scopes: on every request, per JSON-RPC method, per
+        // tool name; implies is a hierarchy (a granted key grants its list)
+        'scopes' => [
+            'default' => [],
+            'methods' => [],
+            'tools' => [],
+            'implies' => [],
+        ],
+        // what becomes the client id: 'principal' (issuer + client +
+        // subject), 'client_id' or 'subject'
+        'identity' => 'principal',
+        // service id of an AuthorizationTokenValidatorInterface ('' = JWT
+        // through the issuer's discovery document; needs firebase/php-jwt)
+        'validator' => '',
+        // service id of the PSR-6 pool for issuer metadata and signing
+        // keys ('' = Psr\Cache\CacheItemPoolInterface)
+        'cache' => '',
+        'resource_name' => '',
+        'resource_documentation' => '',
+    ],
+    'notifications' => [
+        // what carries resource updates to stateless listen streams:
+        // '' (none), 'memory' (one long-running process), 'psr16' or
+        // 'psr6' (the container's cache — publisher and listener are
+        // different PHP-FPM workers)
+        'bus' => '',
+        // seconds a listen stream is held open (0 = until the client or
+        // the runtime ends it); under PHP-FPM a stream holds a worker for
+        // this long — keep it below max_execution_time
+        'subscription_lifetime' => 30,
+    ],
+    // how array/object tool results are encoded into the text content the
+    // agent reads: 'compact' (default, the SDK's own encoding since 0.10:
+    // no indentation, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) or
+    // 'pretty' — indented, ~3x more bytes; structuredContent is produced
+    // either way. An unsupported value fails at config load.
+    'result_json' => 'compact',
+    // guard against a tool result burning an agent's context window
+    // (0 = unlimited). A string result over the limit is truncated with
+    // a marker; any other result (array/object) is rejected outright —
+    // truncated JSON is invalid JSON, not a smaller valid one.
+    'limits' => [
+        'tool_result_bytes' => 0,
+    ],
+    // PSR-16 cache for successful tool results: tool name => TTL in
+    // seconds. Empty (default) = no caching. The cache key always
+    // includes the resolved client id — never share cached results
+    // between clients — and, when openapi.identity_provider is set, the
+    // resolved ExecutionIdentity (delegated credentials can make results
+    // identity-specific below the client-id level). Opt in only tools
+    // that are safe to cache (idempotent reads); the interceptor has no
+    // notion of which are. "Idempotent" is not enough on its own: a tool
+    // whose result depends on the application user behind the MCP client
+    // is only safe to cache when openapi.identity_provider resolves that
+    // user, since the key otherwise identifies the client alone.
+    'cache' => [
+        'tools' => [],
+        // stable application/server identity isolating this server's
+        // entries on a cache backend shared between applications (two
+        // apps on one Redis with same-named tools must never read each
+        // other's results). Empty = server_name.
+        'namespace' => '',
+    ],
+    // tool-call interceptor FQCNs (resolved through the container,
+    // applied in order, first = outermost); each implements
+    // Interceptor\ToolCallInterceptorInterface
+    'interceptors' => [],
+    // prompts/get interceptor FQCNs (resolved through the container,
+    // applied in order, first = outermost); each implements
+    // Interceptor\PromptGetInterceptorInterface
+    'prompt_interceptors' => [],
+    // resources/read interceptor FQCNs (static resources and templates
+    // alike; resolved through the container, applied in order, first =
+    // outermost); each implements Interceptor\ResourceReadInterceptorInterface
+    'resource_interceptors' => [],
+    // tool-result decorator FQCNs (resolved through the container, applied
+    // in order); each implements Interceptor\ToolResultDecoratorInterface
+    // and gets the FORMATTED CallToolResult of every successful tools/call
+    // after the whole interceptor chain — add content (e.g. a ResourceLink
+    // per item) without re-implementing result formatting
+    'result_decorators' => [],
+    // server configurator FQCNs (resolved through the container, applied
+    // in order after the core's own openapi configurator); each
+    // implements ServerConfiguratorInterface. Extension point for
+    // companion packages and app-specific server setup.
+    'configurators' => [],
+    // per-session tool visibility: FQCN of a Visibility\ToolVisibilityInterface
+    // implementation (resolved through the container). Filters tools/list AND
+    // fail-closed rejects tools/call of invisible tools. Empty = all visible.
+    // Mutually exclusive with the declarative 'visibility' lists below.
+    'tool_visibility' => '',
+    // per-session prompt visibility: FQCN of a Visibility\PromptVisibilityInterface
+    // implementation. Filters prompts/list AND fail-closed hides prompts/get
+    // (a hidden prompt is reported as not found). Empty = all visible.
+    'prompt_visibility' => '',
+    // per-session resource visibility: FQCN of a Visibility\ResourceVisibilityInterface
+    // implementation. Filters resources/list + resources/templates/list AND
+    // fail-closed hides resources/read (a hidden resource is reported as
+    // not found). Empty = all visible.
+    'resource_visibility' => '',
+    // declarative visibility: tool-name patterns with '*' wildcards
+    // ('admin.*', '*.delete'). deny hides matches; a non-empty allow hides
+    // everything it does not match; deny wins over allow. Both empty =
+    // all visible. For per-session logic use 'tool_visibility' instead.
+    'visibility' => [
+        'deny' => [],
+        'allow' => [],
+    ],
+    // OpenAPI bridge: expose allow-listed REST operations as MCP tools.
+    // Disabled while spec_path is empty; an empty operations list exposes nothing.
+    // spec_path accepts a file path OR an http(s) URL (e.g. the app's own
+    // spec endpoint — always current; fetched with `spec_headers`, NOT
+    // with the operation `headers`).
+    'openapi' => [
+        'spec_path' => '',
+        'base_url' => '',
+        'operations' => [],
+        // rename operationId => tool name (e.g. ugly generated
+        // operationIds into LLM-friendly names). Allow-list, handler
+        // execution and delegated headers stay keyed by operationId;
+        // interceptors/visibility rules must reference the RENAMED name.
+        'tool_names' => [],
+        // FQCN of an OpenApi\OperationModifierInterface, resolved through
+        // the container; called once per bridged operation after the
+        // tool_names rename to customize description/annotations/name
+        // further. Empty = disabled.
+        'operation_modifier' => '',
+        // operation-call headers, sent to base_url only (e.g. the API's
+        // service token). Deliberately NOT sent with the spec fetch:
+        // when spec_path lives on a different origin, a shared header
+        // set would hand the API token to the spec host.
+        'headers' => [],
+        // spec-fetch headers, sent to spec_path only. Empty by default —
+        // set explicitly when the spec endpoint itself needs auth.
+        'spec_headers' => [],
+        // PSR-16 TTL for URL specs. 0 preserves fetch-on-every-build.
+        'cache_ttl' => 0,
+        // path parameter name => how many "/"-separated segments its
+        // values may carry. Empty (the default) means every path
+        // argument stays single-segment: a slash is rejected, as are
+        // "..", a backslash, an empty value and a bare ".". Opt a
+        // parameter in only for an upstream that genuinely identifies a
+        // resource by a nested path AND accepts it percent-encoded
+        // (GitLab: "group/project" as %2F) — the value comes from the
+        // MCP client, so this widens what the agent may put into the
+        // URL. ".." and backslashes stay rejected; every segment must
+        // match [A-Za-z0-9_][A-Za-z0-9_.-]*; the limit itself is capped
+        // at 20. The limit must be an int in that range — a string,
+        // float or out-of-range value fails at server build time.
+        // Example: ['id' => 3].
+        'multi_segment_path_params' => [],
+        // upper bound on an upstream response body the executor will
+        // buffer; the read stops (and the call fails) before a byte over
+        // the cap is materialized
+        'max_response_bytes' => 4_194_304,
+        // suppress the upstream error-body excerpt in bridged failures —
+        // for service-token deployments where the upstream's error
+        // details are not the MCP caller's to see
+        'opaque_errors' => false,
+        // Optional delegated mode. Configure both application services;
+        // they are resolved on every operation call. Static headers stay
+        // the backward-compatible service-token mode.
+        'identity_provider' => '',
+        'delegated_header_provider' => '',
+        // read-only bridge: reject non-GET operations at build time
+        'safe_methods_only' => false,
+        // default serialization for array-valued query parameters
+        // (type: array in the OpenAPI document): 'repeat' => name=a&name=b
+        // (the OpenAPI form/explode default), 'brackets' => name[]=a&name[]=b
+        // (what PHP's parse_str reads back as an array), 'comma' => name=a,b.
+        // Empty (the default) derives it per parameter from its declared
+        // explode (false => comma, else repeat). An unsupported value fails
+        // the server build.
+        'array_query_style' => '',
+        // per-operation, per-parameter overrides for mixed APIs:
+        // ['getCreators' => ['platforms' => 'brackets']]. Wins over
+        // array_query_style, which wins over the declared explode.
+        'array_query_params' => [],
+        // how bridged operations are executed. 'http' (default) sends a
+        // real PSR-18 request to base_url — the call passes the API's
+        // full middleware stack, but occupies a second worker under FPM
+        // and pays loopback latency. 'psr15' calls the application's own
+        // request handler in-process: same method/URI/query/body/headers,
+        // no network I/O. An unsupported value fails the server build.
+        'executor' => 'http',
+        // FQCN of a Psr\Http\Server\RequestHandlerInterface, resolved
+        // through the container; required for (and only read in) psr15
+        // mode. The nested request carries the same shape the HTTP
+        // executor would send — the handler is the application's, so
+        // isolating its request-scoped state (current route/user) is the
+        // application's contract, see 'in_process_scope'.
+        'handler' => '',
+        // FQCN of an OpenApi\ExecutionRequestAttributesInterface — maps
+        // the resolved ExecutionIdentity to request attributes on the
+        // nested request, so the app's stack authenticates the user the
+        // usual way. psr15 mode only, optional; delegated headers are
+        // still sent as headers either way.
+        'request_attributes' => '',
+        // FQCN of an OpenApi\InProcessScopeInterface — enter()/leave()
+        // hooks the executor runs around the nested handle() (leave()
+        // fires even on failure) for resetting request-scoped state the
+        // outer MCP request left behind: a re-entered kernel otherwise
+        // fails with "Can not set URI since it was already set" or, far
+        // worse, serves the nested call under the outer identity. psr15
+        // mode only, optional.
+        'in_process_scope' => '',
+        // operationIds that get an extra `dryRun` boolean argument; a call
+        // with `dryRun: true` returns the planned request (method, url,
+        // body) instead of executing it. Orthogonal to safe_methods_only —
+        // does not expose an operation the safety gate would otherwise
+        // reject.
+        'dry_run' => [],
+    ],
+    // free-form "how to use this server" text served in the initialize
+    // result — the agent reads it before its first call. Empty = omitted.
+    'instructions' => '',
+    // page size for every list method (tools/resources/templates/prompts).
+    // Applies to the SDK's handlers and to this package's filtering ones
+    // alike, so paging can never differ between them.
+    'pagination_limit' => 50,
+    // pins the initialize handshake to exactly this revision, e.g.
+    // '2025-06-18'. Empty negotiates: the client's requested revision when
+    // supported, otherwise the newest handshake revision (2025-11-25).
+    // Handshake revisions only — the stateless 2026-07-28 era has no
+    // initialize (see modern_era); it and unknown values fail the build.
+    'protocol_version' => '',
+    // MCP Apps (io.modelcontextprotocol/ui): interactive HTML applications
+    // the client renders in a sandboxed iframe. 'enable' => true announces
+    // the extension, which is what attribute-based apps (#[McpResource]
+    // with a ui:// URI) need to be recognized as apps. 'definitions'
+    // declares apps without a PHP class; a non-empty list also enables the
+    // extension.
+    //
+    // Every definition is an array:
+    //   'uri'  => 'ui://dashboard',        // required, must start with ui://
+    //   'name' => 'dashboard',             // required, unique
+    //   'html' => '<!DOCTYPE html>…',      // a string (a Closure would break `config:cache`)
+    //   'title' => 'Dashboard',            // optional
+    //   'description' => 'Sales overview', // optional
+    //   'csp' => ['connect_domains' => ['api.example.com']], // optional
+    //   'permissions' => ['geolocation' => true],            // optional
+    //   'domain' => null,                  // optional
+    //   'prefers_border' => null,          // optional
+    // CSP domains are passed to the client verbatim — the host enforces
+    // the policy, and these definitions are application-owned config.
+    'apps' => [
+        'enable' => false,
+        'definitions' => [],
+    ],
+];

@@ -1,0 +1,69 @@
+# laravel-mcp
+
+Install: `composer require rasuvaeff/laravel-mcp`
+
+Namespace: `Rasuvaeff\LaravelMcp`. Laravel integration of `rasuvaeff/mcp` (server, interceptors, visibility, OAuth)
+and `rasuvaeff/mcp-openapi`. Protocol attributes come from `mcp/sdk`. Laravel 12.41+ or 13, PHP 8.3 – 8.6.
+
+## Rules
+
+- The endpoint is trusted-only: no `endpoint_secret`, `client_secrets` or `oauth` = every request refused.
+- Set `allowed_hosts` in production; only localhost is allowed without it.
+- Tools are ordinary services, resolved through the container; never instantiate them.
+- Keep no request state in a tool's properties: a worker serves many requests.
+- Option keys are those of `rasuvaeff/yii3-mcp`: read `vendor/rasuvaeff/mcp/llms.txt` before guessing one.
+
+## Setup
+
+```bash
+composer require rasuvaeff/laravel-mcp
+php artisan vendor:publish --tag=rasuvaeff-mcp
+```
+
+## Usage
+
+```php
+use Mcp\Server\Capability\Attribute\McpTool;
+
+final readonly class OrderTools
+{
+    public function __construct(private OrderRepository $orders) {}
+
+    #[McpTool(name: 'order.status')]
+    public function status(string $orderId): string
+    {
+        return $this->orders->status($orderId);
+    }
+}
+```
+
+```php
+// config/rasuvaeff-mcp.php
+'tools' => [App\Mcp\OrderTools::class],
+'endpoint_secret' => env('MCP_SECRET', ''),
+'allowed_hosts' => ['mcp.example.com'],
+```
+
+`route.path` is the endpoint (`mcp` by default, `''` registers none) and `route.middleware`
+runs before the guard. `guard` is `secret` or `oauth`. Every other key is the one
+`rasuvaeff/yii3-mcp` uses; the published file documents each.
+
+Serve `ProtectedResourceMetadataHandler` from a route of your own at
+`/.well-known/oauth-protected-resource/<path>`.
+
+```bash
+php artisan mcp:list    # what is served
+php artisan mcp:serve   # stdio, for a local agent
+```
+
+## API
+
+- `Rasuvaeff\LaravelMcp\McpServiceProvider` — bindings, config, route and commands
+- `Rasuvaeff\LaravelMcp\HttpEndpoint` — route action: guard, then the MCP endpoint
+- `Rasuvaeff\LaravelMcp\Guard` — `secret` or `oauth`
+
+Worker behaviour:
+
+- The route is outside the `web` group: no cookie session and no CSRF token.
+- The server is `scoped`: under Octane it is built per request and dropped with it. Sessions on disk and the notification bus stay.
+- `config:cache` works: the config holds no closures, `apps.definitions[].html` is a string.
