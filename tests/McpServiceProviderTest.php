@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Rasuvaeff\LaravelMcp\Tests;
 
 use GuzzleHttp\Client;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
+use Mcp\Schema\Notification\ToolListChangedNotification;
 use Mcp\Server\Server;
 use Mcp\Server\Session\SessionStoreInterface;
 use Mcp\Server\Subscription\InMemoryNotificationBus;
@@ -26,16 +29,19 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\SimpleCache\CacheInterface;
 use Rasuvaeff\LaravelMcp\AutowiringContainer;
 use Rasuvaeff\LaravelMcp\Guard;
 use Rasuvaeff\LaravelMcp\HttpEndpoint;
 use Rasuvaeff\LaravelMcp\McpServiceProvider;
 use Rasuvaeff\LaravelMcp\Tests\Support\ClockTool;
 use Rasuvaeff\LaravelMcp\Tests\Support\LaravelApplication;
+use Rasuvaeff\LaravelMcp\Tests\Support\NumbersAsStringsStore;
 use Rasuvaeff\Mcp\Configuration\ServerOptions;
 use Rasuvaeff\Mcp\McpAction;
 use Rasuvaeff\Mcp\SharedSecretMiddleware;
 use Rasuvaeff\Mcp\Testing\AdapterContractTool;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Testo\Assert;
@@ -277,6 +283,44 @@ final class McpServiceProviderTest
         Assert::false($container->has(MiddlewareInterface::class));
         Assert::false($container->has(\FilterIterator::class));
         Assert::false($container->has('nothing'));
+    }
+
+    public function theCacheOfTheServerKeepsTheTypesOfNumbers(): void
+    {
+        $app = $this->boot()->app;
+        $app->instance('cache.store', new Repository(new NumbersAsStringsStore(new ArrayStore(serializesValues: true))));
+        $container = new AutowiringContainer($app);
+
+        $cache = $container->get(CacheInterface::class);
+        $cache->set('n', 3);
+        Assert::same($cache->get('n'), 3);
+
+        $pool = $container->get(CacheItemPoolInterface::class);
+        $pool->save($pool->getItem('p')->set(4));
+        Assert::same($container->get(CacheItemPoolInterface::class)->getItem('p')->get(), 4);
+
+        $own = new ArrayAdapter();
+        $app->instance(CacheItemPoolInterface::class, $own);
+        Assert::same($container->get(CacheItemPoolInterface::class), $own);
+        Assert::same($container->get('cache.store'), $app->make('cache.store'));
+    }
+
+    #[DataProvider('cacheBuses')]
+    public function theBusCountsOnAStoreThatReturnsNumbersAsStrings(string $kind): void
+    {
+        $app = $this->boot(['notifications' => ['bus' => $kind]])->app;
+        $app->instance('cache.store', new Repository(new NumbersAsStringsStore(new ArrayStore(serializesValues: true))));
+        $bus = $app->make(NotificationBusInterface::class);
+        $bus->publish(new ToolListChangedNotification());
+        $bus->publish(new ToolListChangedNotification());
+
+        Assert::same($bus->cursor(), 2);
+    }
+
+    public static function cacheBuses(): iterable
+    {
+        yield 'psr16' => ['psr16'];
+        yield 'psr6' => ['psr6'];
     }
 
     public function theSecretMiddlewareComesFromTheConfig(): void

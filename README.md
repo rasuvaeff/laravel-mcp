@@ -89,6 +89,21 @@ Route::get(
 The OpenAPI bridge and OAuth call out through the PSR-18 `ClientInterface`: Guzzle by default,
 a binding of yours wins. For a timeout bind `new Client(['timeout' => 5])`.
 
+### Several nodes
+
+Stateless calls need nothing. For sessions bind a shared store; notifications and the call budget
+follow the cache of the application, so point it at Redis:
+
+```php
+$this->app->singleton(SessionStoreInterface::class, fn($app) => new Psr16SessionStore($app->make(CacheInterface::class)));
+```
+
+The call budget counts over PSR-16, which has no atomic increment: calls sent at the same moment
+may all pass. It stops a loop, it is not a quota.
+
+Keycloak puts your endpoint in `aud` only through an audience mapper on the client; without it
+every token is refused with 401.
+
 ### Long-running workers
 
 - The route is outside the `web` group: no cookie session and no CSRF token.

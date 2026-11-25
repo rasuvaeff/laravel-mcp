@@ -68,7 +68,7 @@ final class McpServiceProvider extends ServiceProvider
         // bound only when configured: ResourceUpdateNotifier takes it as an
         // optional dependency and must share the server's instance
         if (($this->config()['notifications']['bus'] ?? '') !== '') {
-            $this->app->singletonIf(NotificationBusInterface::class, static fn(Application $app): ?NotificationBusInterface => $app->make(ServerOptions::class)->notificationBus($app));
+            $this->app->singletonIf(NotificationBusInterface::class, static fn(Application $app): ?NotificationBusInterface => $app->make(ServerOptions::class)->notificationBus(new AutowiringContainer($app)));
         }
 
         $this->app->scoped(McpServerFactory::class, static fn(Application $app): McpServerFactory => $app->make(ServerOptions::class)->serverFactory(
