@@ -75,7 +75,18 @@ php artisan mcp:serve   # stdio, for a local agent
 что в `rasuvaeff/yii3-mcp`; каждый описан в опубликованном файле.
 
 `ProtectedResourceMetadataHandler` отдайте своим маршрутом по адресу
-`/.well-known/oauth-protected-resource/<path>`.
+`/.well-known/oauth-protected-resource/<path>`:
+
+```php
+// routes/web.php
+Route::get(
+    '/.well-known/oauth-protected-resource/mcp',
+    fn(ServerRequestInterface $request, ProtectedResourceMetadataHandler $handler) => $handler->handle($request),
+);
+```
+
+Мост OpenAPI и OAuth ходят наружу через PSR-18 `ClientInterface`: по умолчанию Guzzle, ваша
+привязка важнее. Для таймаута привяжите `new Client(['timeout' => 5])`.
 
 ### Долгоживущие воркеры
 

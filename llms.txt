@@ -49,7 +49,18 @@ runs before the guard. `guard` is `secret` or `oauth`. Every other key is the on
 `rasuvaeff/yii3-mcp` uses; the published file documents each.
 
 Serve `ProtectedResourceMetadataHandler` from a route of your own at
-`/.well-known/oauth-protected-resource/<path>`.
+`/.well-known/oauth-protected-resource/<path>`:
+
+```php
+// routes/web.php
+Route::get(
+    '/.well-known/oauth-protected-resource/mcp',
+    fn(ServerRequestInterface $request, ProtectedResourceMetadataHandler $handler) => $handler->handle($request),
+);
+```
+
+The OpenAPI bridge and OAuth call out through the PSR-18 `ClientInterface`: Guzzle by default,
+a binding of yours wins. For a timeout bind `new Client(['timeout' => 5])`.
 
 ```bash
 php artisan mcp:list    # what is served

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\LaravelMcp\Tests;
 
+use GuzzleHttp\Client;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 use Mcp\Server\Server;
@@ -15,6 +16,8 @@ use Mcp\Server\Transport\Http\OAuth\ProtectedResourceMetadataHandler;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
+use Psr\Cache\CacheItemPoolInterface;
+use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -29,7 +32,6 @@ use Rasuvaeff\LaravelMcp\HttpEndpoint;
 use Rasuvaeff\LaravelMcp\McpServiceProvider;
 use Rasuvaeff\LaravelMcp\Tests\Support\ClockTool;
 use Rasuvaeff\LaravelMcp\Tests\Support\LaravelApplication;
-use Rasuvaeff\LaravelMcp\Tests\Support\NotFoundHandler;
 use Rasuvaeff\Mcp\Configuration\ServerOptions;
 use Rasuvaeff\Mcp\McpAction;
 use Rasuvaeff\Mcp\SharedSecretMiddleware;
@@ -229,6 +231,19 @@ final class McpServiceProviderTest
         }
     }
 
+    public function theServicesTheServerMayNeedAreBound(): void
+    {
+        $app = $this->boot()->app;
+
+        Assert::instanceOf($app->make(ClientInterface::class), ClientInterface::class);
+        Assert::instanceOf($app->make(CacheItemPoolInterface::class), CacheItemPoolInterface::class);
+
+        $own = new Client();
+        $app->instance(ClientInterface::class, $own);
+        (new McpServiceProvider($app))->register();
+        Assert::same($app->make(ClientInterface::class), $own);
+    }
+
     public function openApiOperationsBecomeTools(): void
     {
         $spec = tempnam(sys_get_temp_dir(), prefix: 'spec');
@@ -238,7 +253,7 @@ final class McpServiceProviderTest
             'paths' => ['/items' => ['get' => ['operationId' => 'listItems', 'responses' => ['200' => ['description' => 'ok']]]]],
         ], JSON_THROW_ON_ERROR));
         $output = new BufferedOutput();
-        $this->boot(['openapi' => ['spec_path' => $spec, 'base_url' => 'https://api.test', 'operations' => ['listItems'], 'executor' => 'psr15', 'handler' => NotFoundHandler::class]])
+        $this->boot(['openapi' => ['spec_path' => $spec, 'base_url' => 'https://api.test', 'operations' => ['listItems']]])
             ->console()->call('mcp:list', [], $output);
         unlink($spec);
 

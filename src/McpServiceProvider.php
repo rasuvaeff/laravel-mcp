@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\LaravelMcp;
 
+use GuzzleHttp\Client;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Routing\Router;
@@ -16,6 +17,7 @@ use Mcp\Server\Session\SessionStoreInterface;
 use Mcp\Server\Subscription\NotificationBusInterface;
 use Mcp\Server\Transport\Http\OAuth\ProtectedResourceMetadataHandler;
 use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestFactoryInterface;
@@ -55,6 +57,9 @@ final class McpServiceProvider extends ServiceProvider
         foreach ([ResponseFactoryInterface::class, StreamFactoryInterface::class, ServerRequestFactoryInterface::class, RequestFactoryInterface::class] as $factory) {
             $this->app->bindIf($factory, Psr17Factory::class);
         }
+
+        // the OpenAPI bridge and OAuth discovery call out; Laravel ships Guzzle but binds no PSR-18 client
+        $this->app->bindIf(ClientInterface::class, static fn(): ClientInterface => new Client());
 
         $this->app->singleton(ServerOptions::class, static fn(Application $app): ServerOptions => ServerOptions::fromParams(self::params($app)));
         $this->app->singletonIf(SessionStoreInterface::class, static fn(Application $app): SessionStoreInterface => $app->make(ServerOptions::class)->sessionStore());
