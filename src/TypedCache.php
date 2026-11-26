@@ -44,6 +44,8 @@ final readonly class TypedCache implements CacheInterface
     }
 
     /**
+     * @param iterable<string> $keys
+     *
      * @return array<string, mixed>
      */
     #[\Override]
@@ -76,6 +78,9 @@ final readonly class TypedCache implements CacheInterface
         return $this->cache->setMultiple($wrapped, $ttl);
     }
 
+    /**
+     * @param iterable<string> $keys
+     */
     #[\Override]
     public function deleteMultiple(iterable $keys): bool
     {

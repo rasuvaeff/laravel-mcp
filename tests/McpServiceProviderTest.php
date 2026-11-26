@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\LaravelMcp\Tests;
 
 use GuzzleHttp\Client;
-use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
@@ -296,7 +295,7 @@ final class McpServiceProviderTest
     public function theCacheOfTheServerKeepsTheTypesOfNumbers(): void
     {
         $app = $this->boot()->app;
-        $app->instance('cache.store', new Repository(new NumbersAsStringsStore(new ArrayStore(serializesValues: true))));
+        $app->instance('cache.store', new Repository(new NumbersAsStringsStore()));
         $container = new AutowiringContainer($app);
 
         $cache = $container->get(CacheInterface::class);
@@ -317,7 +316,7 @@ final class McpServiceProviderTest
     public function theBusCountsOnAStoreThatReturnsNumbersAsStrings(string $kind): void
     {
         $app = $this->boot(['notifications' => ['bus' => $kind]])->app;
-        $app->instance('cache.store', new Repository(new NumbersAsStringsStore(new ArrayStore(serializesValues: true))));
+        $app->instance('cache.store', new Repository(new NumbersAsStringsStore()));
         $bus = $app->make(NotificationBusInterface::class);
         $bus->publish(new ToolListChangedNotification());
         $bus->publish(new ToolListChangedNotification());

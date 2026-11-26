@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\LaravelMcp\Tests;
 
-use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\Repository;
 use Psr\SimpleCache\CacheInterface;
 use Rasuvaeff\LaravelMcp\Tests\Support\NumbersAsStringsStore;
@@ -81,6 +80,6 @@ final class TypedCacheTest
 
     private function laravel(): CacheInterface
     {
-        return new Repository(new NumbersAsStringsStore(new ArrayStore(serializesValues: true)));
+        return new Repository(new NumbersAsStringsStore());
     }
 }
