@@ -167,16 +167,24 @@ final class McpServiceProviderTest
         Assert::instanceOf($app->make(ProtectedResourceMetadataHandler::class), ProtectedResourceMetadataHandler::class);
     }
 
-    public function anUnknownGuardFails(): void
+    #[DataProvider('unknownGuards')]
+    public function anUnknownGuardFailsNamingIt(mixed $guard, string $message): void
     {
         $caught = null;
 
         try {
-            $this->boot(['guard' => 'none'])->app->make(HttpEndpoint::class);
-        } catch (\ValueError $caught) {
+            $this->boot(['guard' => $guard])->app->make(HttpEndpoint::class);
+        } catch (\InvalidArgumentException $caught) {
         }
 
-        Assert::notNull($caught);
+        Assert::same($caught?->getMessage(), $message);
+    }
+
+    public static function unknownGuards(): iterable
+    {
+        yield 'unknown' => ['none', 'Unknown MCP guard "none": use "secret" or "oauth"'];
+        yield 'empty, an unset environment variable' => ['', 'Unknown MCP guard "": use "secret" or "oauth"'];
+        yield 'not a string' => [true, 'Unknown MCP guard bool: use "secret" or "oauth"'];
     }
 
     public function anUnsupportedParamFailsNamingIt(): void

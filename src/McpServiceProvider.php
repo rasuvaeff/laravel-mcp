@@ -102,7 +102,7 @@ final class McpServiceProvider extends ServiceProvider
         $this->app->bind(ProtectedResourceMetadataHandler::class, static fn(Application $app): ProtectedResourceMetadataHandler => self::oauth($app)->metadataHandler());
         $this->app->bind(HttpEndpoint::class, static fn(Application $app): HttpEndpoint => new HttpEndpoint(
             action: $app->make(McpAction::class),
-            guard: match (Guard::from((string) (self::params($app)['guard'] ?? Guard::Secret->value))) {
+            guard: match (Guard::fromConfig(self::params($app)['guard'] ?? Guard::Secret->value)) {
                 Guard::Secret => $app->make(SharedSecretMiddleware::class),
                 Guard::OAuth => $app->make(BearerTokenMiddleware::class),
             },

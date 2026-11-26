@@ -104,8 +104,12 @@ may all pass. It stops a loop, it is not a quota.
 Keycloak puts your endpoint in `aud` only through an audience mapper on the client; without it
 every token is refused with 401.
 
+While the session store is unavailable, `initialize` still answers with a session id: the SDK logs the failed save, and the next request with that id gets 404, after which the client opens a new session.
+
 ### Long-running workers
 
+- Checked on FrankenPHP (classic and worker), Swoole and RoadRunner. Under RoadRunner a `subscriptions/listen` stream arrives in one piece when it ends: the PSR-7 bridge captures the whole body. Keep `notifications.subscription_lifetime` short there, or serve listen streams from another runtime.
+- `guard` other than `secret` or `oauth`, an empty one included, fails with `Unknown MCP guard`.
 - The route is outside the `web` group: no cookie session and no CSRF token.
 - The server is `scoped`: under Octane it is built per request and dropped with it. Sessions on disk and the notification bus stay.
 - `config:cache` works: the config holds no closures, `apps.definitions[].html` is a string.

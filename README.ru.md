@@ -103,8 +103,12 @@ $this->app->singleton(SessionStoreInterface::class, fn($app) => new Psr16Session
 Keycloak добавляет ваш эндпоинт в `aud` только через audience mapper клиента; без него любой
 токен получит 401.
 
+Пока хранилище сессий недоступно, `initialize` всё равно отвечает с id сессии: SDK пишет неудачное сохранение в лог, следующий запрос с этим id получает 404, после чего клиент открывает новую сессию.
+
 ### Долгоживущие воркеры
 
+- Проверено на FrankenPHP (обычный режим и worker), Swoole и RoadRunner. Под RoadRunner поток `subscriptions/listen` приходит целиком, когда закончится: мост PSR-7 собирает всё тело. Держите там `notifications.subscription_lifetime` коротким или отдавайте потоки другим сервером.
+- `guard` кроме `secret` и `oauth`, в том числе пустой, даёт ошибку `Unknown MCP guard`.
 - Маршрут вне группы `web`: ни сессии в cookie, ни CSRF-токена.
 - Сервер — `scoped`: под Octane собирается на запрос и уходит вместе с ним. Сессии на диске и шина уведомлений остаются.
 - `config:cache` работает: в конфиге нет замыканий, `apps.definitions[].html` — строка.
