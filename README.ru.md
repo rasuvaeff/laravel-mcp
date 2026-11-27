@@ -26,7 +26,7 @@ Protocol поверх официального [`mcp/sdk`](https://packagist.org
 | Требование | Версия |
 |---|---|
 | PHP | 8.3 – 8.6 |
-| `laravel/framework` | `^12.41 \|\| ^13.0` |
+| `laravel/framework` | `^12.71 \|\| ^13.40` |
 | `rasuvaeff/mcp` | `^0.1.4` |
 | `rasuvaeff/mcp-openapi` | `^0.1.3` |
 | `firebase/php-jwt` | необязательно, `^7.0`: проверка JWT для OAuth |

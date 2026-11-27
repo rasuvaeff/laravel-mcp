@@ -3,7 +3,7 @@
 Install: `composer require rasuvaeff/laravel-mcp`
 
 Namespace: `Rasuvaeff\LaravelMcp`. Laravel integration of `rasuvaeff/mcp` (server, interceptors, visibility, OAuth)
-and `rasuvaeff/mcp-openapi`. Protocol attributes come from `mcp/sdk`. Laravel 12.41+ or 13, PHP 8.3 – 8.6.
+and `rasuvaeff/mcp-openapi`. Protocol attributes come from `mcp/sdk`. Laravel 12.71+ or 13.40+, PHP 8.3 – 8.6.
 
 ## Rules
 
