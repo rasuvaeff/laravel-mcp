@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Requires `laravel/framework` `^12.71 || ^13.40`, `guzzlehttp/guzzle` `^7.15.2`, `symfony/cache` `^7.4.12 || ^8.0.12`, `symfony/http-foundation` `^7.4.23 || ^8.1.11`: versions with security advisories are no longer allowed.
+
 ## 0.1.0 — 2026-11-26
 
 - Initial package: Laravel integration of `rasuvaeff/mcp` and `rasuvaeff/mcp-openapi`.

@@ -27,7 +27,7 @@ the container, an HTTP endpoint, console commands, and the
 | Requirement | Version |
 |---|---|
 | PHP | 8.3 – 8.6 |
-| `laravel/framework` | `^12.41 \|\| ^13.0` |
+| `laravel/framework` | `^12.71 \|\| ^13.40` |
 | `rasuvaeff/mcp` | `^0.1.4` |
 | `rasuvaeff/mcp-openapi` | `^0.1.3` |
 | `firebase/php-jwt` | optional, `^7.0`: JWT validation for OAuth |
